@@ -1,3 +1,6 @@
+Module = require('module');
+Falafel = require('falafel');
+
 /**
  * Author: Freddie Carthy
  *
@@ -13,6 +16,8 @@ function Trace() {
     var fName = _getName(arguments[i]);
     this.createTrace(fName, arguments[i]);
   }
+
+  _replaceCompile();
 }
 
 /**
@@ -104,18 +109,56 @@ function _isFunction(fn) {
   return (typeof fn === 'function');
 }
 
+/**
+ * Take over Node's compile method and add some logging of our own
+ *
+ * @access private
+ */
+function _replaceCompile() {
+  
+  var original = Module.prototype._compile;
 
+  Module.prototype._compile = function(content, filename) {
 
-function func() {
-  console.log('running 1');
+    var newFunctions = _makeNewFunctions(content);
+
+    original.call(this, newFunctions, filename);
+
+  };
 }
-var func2 = function() {
-  console.log('running 2');
+
+/**
+ * Takes a function and creates a new one with logging
+ *
+ * @param {String} content, string containing file contents
+ * @access private
+ */
+function _makeNewFunctions(content) {
+    var output = Falafel(content, {}, function(node) {
+
+      // only trace function nodes
+      if (node.type == 'FunctionDeclaration') {
+        // e.g. function foo()
+        var description = node.source().slice(0, node.body.range[0] - node.range[0]);
+
+        // get function name 
+        var funcName = description.slice(9, node.body.range[0] - node.range[0]);
+
+        // function contents
+        var oldFunction = node.body.source();
+
+        // construct new function contents
+        var enterText = 'process.stderr.write("entering ' + funcName + '");';
+        var leaveText = 'process.stderr.write("leaving ' + funcName + '");';
+        var newFunction = enterText + oldFunction + leaveText;
+
+        // update the node with our newly minted function, which includes logging
+        node.update(description + '{' + newFunction + '}');
+      }
+
+    });
+
+    return output.toString();
 }
 
-var trace = new Trace();
-
-trace.createTrace('test', func);
-trace.createTrace('test2', func2);
-
-module.exports = Trace;
+module.exports = new Trace;
