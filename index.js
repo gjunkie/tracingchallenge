@@ -128,7 +128,7 @@ function _replaceCompile() {
 }
 
 /**
- * Takes a function and creates a new one with logging
+ * Takes content from a module and modifies its functions to add logging
  *
  * @param {String} content, string containing file contents
  * @access private
@@ -158,6 +158,7 @@ function _makeNewFunctions(content) {
 
     });
 
+    // return the new, modified content
     return output.toString();
 }
 
