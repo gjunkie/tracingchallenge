@@ -17,7 +17,8 @@ function Trace() {
     this.createTrace(fName, arguments[i]);
   }
 
-  _replaceCompile();
+  this.indent = 0;
+  this._replaceCompile();
 }
 
 /**
@@ -114,13 +115,14 @@ function _isFunction(fn) {
  *
  * @access private
  */
-function _replaceCompile() {
-  
+Trace.prototype._replaceCompile = function() {
+
+  var self = this;
   var original = Module.prototype._compile;
 
   Module.prototype._compile = function(content, filename) {
 
-    var newFunctions = _makeNewFunctions(content);
+    var newFunctions = self._makeNewFunctions(content);
 
     original.call(this, newFunctions, filename);
 
@@ -133,27 +135,44 @@ function _replaceCompile() {
  * @param {String} content, string containing file contents
  * @access private
  */
-function _makeNewFunctions(content) {
+Trace.prototype._makeNewFunctions = function(content) {
+  var self = this;
     var output = Falafel(content, {}, function(node) {
-
       // only trace function nodes
       if (node.type == 'FunctionDeclaration') {
         // e.g. function foo()
         var description = node.source().slice(0, node.body.range[0] - node.range[0]);
 
         // get function name 
-        var funcName = description.slice(9, node.body.range[0] - node.range[0]);
+        var funcName = description.slice(9, node.body.range[0] - node.range[0] - 3);
 
         // function contents
-        var oldFunction = node.body.source();
+        var oldFunction = node.body.source().substring(1, node.body.source().length - 1);
 
         // construct new function contents
-        var enterText = 'process.stderr.write("entering ' + funcName + '");';
-        var leaveText = 'process.stderr.write("leaving ' + funcName + '");';
+        var enterText = 'process.stderr.write("'+ new Array(self.indent+1).join("  ") + 'Entering ' + funcName + '\\n");';
+        var leaveText = 'process.stderr.write("'+ new Array(self.indent+1).join("  ") + 'Leaving ' + funcName + '\\n");';
         var newFunction = enterText + oldFunction + leaveText;
 
         // update the node with our newly minted function, which includes logging
         node.update(description + '{' + newFunction + '}');
+        self.indent++;
+      } else if (node.type == 'FunctionExpression') {
+        var funcName = node.name;
+
+        var description = node.parent.parent.source().slice(0, node.body.range[0] - node.range[0]);
+
+        // function contents
+        var oldFunction = node.body.source().substring(1, node.body.source().length - 1);
+
+        // construct new function contents
+        var enterText = 'process.stderr.write("'+ new Array(self.indent+1).join("  ") + 'Entering ' + funcName + '\\n");';
+        var leaveText = 'process.stderr.write("'+ new Array(self.indent+1).join("  ") + 'Leaving ' + funcName + '\\n");';
+        var newFunction = enterText + oldFunction + leaveText;
+
+        // update the node with our newly minted function, which includes logging
+        node.body.update('{' + newFunction + '}');
+        self.indent++;
       }
 
     });
